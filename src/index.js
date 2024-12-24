@@ -18,7 +18,7 @@ export default {
 
         // Handle the server-side WebSocket in the Durable Object
         await room.handleSession(server);
-
+        
         return new Response(null, {
             status: 101,
             webSocket: client
