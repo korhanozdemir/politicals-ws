@@ -1,27 +1,12 @@
-import { GameRoom } from './game-room';
-
-export { GameRoom };
+export { GameRoom } from './game-room';
 
 export default {
     async fetch(request, env) {
-        if (request.headers.get('Upgrade') !== 'websocket') {
-            return new Response('Expected WebSocket', { status: 400 });
-        }
-
-        // Get the GameRoom Durable Object
+        // Get the game room instance
         const id = env.GAME_ROOM.idFromName('default-room');
         const room = env.GAME_ROOM.get(id);
 
-        // Create WebSocket pair
-        const pair = new WebSocketPair();
-        const [client, server] = Object.values(pair);
-
-        // Handle the server-side WebSocket in the Durable Object
-        await room.handleSession(server);
-        
-        return new Response(null, {
-            status: 101,
-            webSocket: client
-        });
+        // Forward the request to the Durable Object
+        return room.fetch(request);
     }
 };

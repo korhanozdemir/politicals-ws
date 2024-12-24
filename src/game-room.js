@@ -1,6 +1,7 @@
 export class GameRoom {
     constructor(state, env) {
-        this.state = state;
+        super(state, env);
+        // Track all connected clients
         this.connections = new Set();
         this.gameState = {
             territories: [
@@ -13,34 +14,39 @@ export class GameRoom {
         };
     }
 
-    broadcast(message) {
-        console.log(`Broadcasting to ${this.connections.size} clients:`, message);
-        this.connections.forEach(ws => ws.send(JSON.stringify(message)));
-    }
+    // This is the method that will be called by the Worker
+    async fetch(request) {
+        // Verify this is a WebSocket request
+        const upgradeHeader = request.headers.get('Upgrade');
+        if (!upgradeHeader || upgradeHeader !== 'websocket') {
+            return new Response('Expected Upgrade: websocket', { status: 426 });
+        }
 
-    async handleSession(ws) {
-        // Accept the WebSocket
-        ws.accept();
-        this.connections.add(ws);
-        console.log('Client connected, total connections:', this.connections.size);
+        // Create the WebSocket pair
+        const pair = new WebSocketPair();
+        const [client, server] = Object.values(pair);
+
+        // Accept the connection
+        server.accept();
+        this.connections.add(server);
 
         // Send initial state
-        ws.send(JSON.stringify({
+        server.send(JSON.stringify({
             type: 'GAME_STATE',
             payload: this.gameState
         }));
 
         // Handle messages
-        ws.addEventListener('message', async ({ data }) => {
+        server.addEventListener('message', event => {
             try {
-                const message = JSON.parse(data);
-                console.log('Received message:', message);
+                const data = JSON.parse(event.data);
 
-                switch (message.type) {
+                switch (data.type) {
                     case 'CLAIM_TERRITORY':
-                        const territory = this.gameState.territories.find(t => t.id === message.territoryId);
+                        const territory = this.gameState.territories.find(t => t.id === data.territoryId);
                         if (territory && !territory.owner) {
-                            territory.owner = message.playerNickname;
+                            territory.owner = data.playerNickname;
+                            // Broadcast to all clients
                             this.broadcast({
                                 type: 'GAME_STATE',
                                 payload: this.gameState
@@ -56,15 +62,32 @@ export class GameRoom {
                         });
                         break;
                 }
-            } catch (err) {
-                console.error('Error processing message:', err);
+            } catch (error) {
+                console.error('Error handling message:', error);
             }
         });
 
         // Handle disconnection
-        ws.addEventListener('close', () => {
-            this.connections.delete(ws);
-            console.log('Client disconnected, remaining:', this.connections.size);
+        server.addEventListener('close', () => {
+            this.connections.delete(server);
+        });
+
+        // Return the client end of the WebSocket
+        return new Response(null, {
+            status: 101,
+            webSocket: client
+        });
+    }
+
+    broadcast(message) {
+        const messageStr = JSON.stringify(message);
+        this.connections.forEach(client => {
+            try {
+                client.send(messageStr);
+            } catch (error) {
+                // If sending fails, remove the client
+                this.connections.delete(client);
+            }
         });
     }
 }
