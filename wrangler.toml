@@ -1,5 +1,6 @@
 name = "politicals-ws"
 main = "src/index.js"
+compatibility_date = "2024-12-24"
 
 [durable_objects]
 bindings = [
