@@ -1,4 +1,7 @@
-export class GameRoom {
+// src/game-room.js
+import { DurableObject } from 'cloudflare:workers';
+
+export class GameRoom extends DurableObject {
     constructor(state, env) {
         super(state, env);
         // Track all connected clients
@@ -14,9 +17,8 @@ export class GameRoom {
         };
     }
 
-    // This is the method that will be called by the Worker
+    // Rest of the code remains the same...
     async fetch(request) {
-        // Verify this is a WebSocket request
         const upgradeHeader = request.headers.get('Upgrade');
         if (!upgradeHeader || upgradeHeader !== 'websocket') {
             return new Response('Expected Upgrade: websocket', { status: 426 });
@@ -40,6 +42,7 @@ export class GameRoom {
         server.addEventListener('message', event => {
             try {
                 const data = JSON.parse(event.data);
+                console.log('Received message:', data);
 
                 switch (data.type) {
                     case 'CLAIM_TERRITORY':
